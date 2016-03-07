@@ -1,0 +1,93 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Veit Wulms"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_document
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE, tidy=TRUE)
+```
+
+
+##Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The subjects were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+```{r echo=FALSE}
+library(dplyr)
+library(lattice)
+library(ggplot2)
+library(caret)
+```
+
+## Download Data
+```{r echo=TRUE}
+#downloadung the data
+trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if(!file.exists("./train.csv")){download.file(trainURL,destfile="./train.csv", method="curl")}
+if(!file.exists("./test.csv")){download.file(testURL,destfile="./test.csv", method="curl")}
+##read in data in case it hasn't been before
+if(!exists("training")){training <- read.csv("train.csv")}
+if(!exists("testing")){testing <- read.csv("test.csv")}
+```
+
+```{r}
+dim(training);dim(testing)
+```
+
+## Cleaning Data
+
+### Removing obsolete variables
+In a first step we remove obsolote variables like the user name, index, and time stamp, that are not correlated to the outcome.
+
+```{r}
+training <- select(training,-(1:7))
+dim(training)
+```
+
+### Removing near zero values
+Then we remove values with little or no variability.
+
+```{r}
+nearzero <- nearZeroVar(training)
+training <- training[,-nearzero]
+dim(training)
+```
+
+### Removing columns with more than 95% NAs
+Finally, we remove columns where more than 95% of the observations equal NA.
+
+```{r}
+training <- training[,colSums(!is.na(training))/nrow(training) > .95]
+dim(training)
+```
+
+### Cross Validation and Expected Out-Of-Sample Error
+To find the most contributing predictors, we performa a cross validation. Therefore we subset the training data into two separate data sets. We will gain an estimate of the out-of-sample error from cross validation.
+
+```{r}
+set.seed(1309)
+inTrain <- createDataPartition(training$classe, p=0.7, list=F)
+subTraining <- training[inTrain,]
+subTest <- training[-inTrain,]
+dim(subTraining);dim(subTest)
+ctrl <- trainControl(method="cv", 3)
+trainFit <- train(classe ~ ., data=subTraining, method="rf", trControl=ctrl)
+subPredict <- predict(trainFit, subTest)
+confusionMatrix(subTest$classe,subPredict)
+```
+
+Cross validation on the training subset resulted in an expected out-of-sample accuracy of 99.2%.
+
+### Prediction of Test Cases
+We can now apply the model to the test cases. After review, the model predicted the outcomes with 100% accuracy.
+
+```{r}
+predictMain <- predict(trainFit, testing)
+print(predictMain)
+```
